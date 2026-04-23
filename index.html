@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="Discord Markdown 即時預覽編輯器,支援中文排版自動檢查與修正">
+<meta name="theme-color" content="#fafaf7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#17181a" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<title>Discord Markdown Editor · 即時預覽與中文排版檢查</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fafaf7;
+    --surface: #ffffff;
+    --surface-2: #f2f0ea;
+    --surface-3: #e9e6dd;
+    --ink: #1a1a1a;
+    --ink-2: #4a4a48;
+    --ink-3: #8a8882;
+    --ink-4: #b4b1a8;
+    --line: #e5e3dc;
+    --line-strong: #c9c6bc;
+    --accent: #d94f2a;
+    --accent-soft: #fdebe5;
+    --blue: #2b5b9e;
+    --blue-soft: #e3edf9;
+    --amber: #8a6208;
+    --amber-soft: #f7ecd0;
+    --violet: #5d3c8a;
+    --violet-soft: #ece3f4;
+    --teal: #1d6b58;
+    --teal-soft: #dcefe8;
+    --err: #a63030;
+    --err-soft: #fbe5e5;
+    /* Discord dark preview colors */
+    --discord-bg: #313338;
+    --discord-surface: #2b2d31;
+    --discord-text: #dbdee1;
+    --discord-muted: #949ba4;
+    --discord-link: #00a8fc;
+    --discord-code: #1e1f22;
+    --discord-quote: #4e5058;
+    --radius-sm: 4px;
+    --radius: 6px;
+    --radius-lg: 10px;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 2px 8px rgba(0,0,0,0.06);
+    --shadow-toast: 0 8px 24px rgba(0,0,0,0.16);
+    --focus: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+    --touch-min: 40px;
+    --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  /* Dark mode — follows system preference. Palette mirrors the light scheme's
+     warm-neutral character; Discord preview keeps its own colors via .is-discord. */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a;
+      --surface: #1e1f22;
+      --surface-2: #27282c;
+      --surface-3: #32343a;
+      --ink: #f0eee8;
+      --ink-2: #c4c1b8;
+      --ink-3: #8a8882;
+      --ink-4: #5d5c57;
+      --line: #2e2f33;
+      --line-strong: #46474c;
+      --accent: #ff7b52;
+      --accent-soft: #3a1f15;
+      --blue: #6ca5e8;
+      --blue-soft: #1a2a3d;
+      --amber: #d4a54e;
+      --amber-soft: #3d2f10;
+      --violet: #a789dc;
+      --violet-soft: #281e3d;
+      --teal: #5cbfa3;
+      --teal-soft: #16302a;
+      --err: #e86a6a;
+      --err-soft: #3d1c1c;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+      --shadow-md: 0 2px 8px rgba(0,0,0,0.35);
+      --shadow-toast: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    /* Force dark images/code blocks to stay readable */
+    .preview pre.md-code { background: #0f1012; border: 1px solid var(--line); }
+    /* Toast inverts in dark mode so it stays visible */
+    .toast { background: var(--ink); color: var(--bg); }
+    /* Primary button in dark mode — use accent for better contrast */
+    .btn-primary { background: var(--accent); color: #1a1a1a; border-color: var(--accent); }
+    .btn-primary:hover:not(:disabled) { background: #ff8a66; border-color: #ff8a66; color: #1a1a1a; }
+    /* Modal backdrop stronger in dark */
+    .modal-backdrop { background: rgba(0, 0, 0, 0.65); }
+  }
+
+  * { box-sizing: border-box; }
+  *:focus { outline: none; }
+  *:focus-visible { box-shadow: var(--focus); border-radius: var(--radius-sm); }
+
+  html { text-size-adjust: 100%; -webkit-text-size-adjust: 100%; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+  }
+
+  /* sr-only for a11y */
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+  /* ============ layout ============ */
+  .app { max-width: 1280px; width: 100%; margin: 0 auto; padding: 40px 32px 40px; flex: 1; }
+
+  /* ============ masthead ============ */
+  .masthead { display: flex; align-items: center; justify-content: space-between; padding-bottom: 18px; border-bottom: 1px solid var(--line); margin-bottom: 20px; gap: 16px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .brand-mark { font-family: 'Instrument Serif', serif; font-size: 42px; font-weight: 400; font-style: italic; color: var(--ink); line-height: 1; letter-spacing: -0.015em; }
+  .brand-sep { width: 1px; height: 24px; background: var(--line-strong); flex-shrink: 0; }
+  .brand-name { font-size: 16px; color: var(--ink-2); letter-spacing: 0.01em; line-height: 1.2; font-weight: 500; }
+  .masthead-right { display: flex; align-items: center; gap: 12px; }
+  .meta { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
+  .meta-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--teal); margin-right: 6px; vertical-align: middle; animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+  /* ============ workspace ============ */
+  .workspace { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+
+  /* Tab switcher for mobile */
+  .mobile-tabs { display: none; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 3px; margin-bottom: 12px; gap: 2px; }
+  .mobile-tabs button { flex: 1; padding: 10px 12px; background: transparent; border: none; border-radius: var(--radius-sm); font-family: inherit; font-size: 16px; font-weight: 500; color: var(--ink-2); cursor: pointer; transition: all 0.15s var(--ease); min-height: var(--touch-min); }
+  .mobile-tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
+  .mobile-tabs button .count { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-3); margin-left: 4px; font-weight: 400; }
+
+  /* ============ panel ============ */
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); display: flex; flex-direction: column; min-height: 480px; overflow: hidden; box-shadow: var(--shadow-sm); }
+
+  .panel-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--surface); gap: 8px; min-height: 48px; flex-wrap: wrap; }
+  .panel-head-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .panel-title { font-family: 'JetBrains Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-2); font-weight: 500; white-space: nowrap; }
+  .panel-title-num { color: var(--ink-3); font-weight: 400; margin-right: 4px; }
+  .panel-head-right { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .char-count { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* ============ toolbar ============ */
+  .toolbar-wrap { border-bottom: 1px solid var(--line); background: var(--surface-2); overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+  .toolbar-wrap::-webkit-scrollbar { height: 4px; }
+  .toolbar { display: flex; gap: 3px; padding: 6px 10px; width: max-content; min-width: 100%; }
+  .tool-btn { font-family: 'JetBrains Mono', monospace; font-size: 15px; padding: 0 12px; min-height: 38px; min-width: 38px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer; color: var(--ink-2); transition: all 0.12s var(--ease); line-height: 1; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; font-weight: 500; }
+  .tool-btn:hover { border-color: var(--ink-2); color: var(--ink); transform: translateY(-1px); }
+  .tool-btn:active { transform: translateY(0); background: var(--surface-2); }
+  .tool-btn i { font-style: italic; font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 17px; }
+  .tool-btn u { text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  .tool-btn s { text-decoration-thickness: 1px; }
+  .tool-divider { width: 1px; background: var(--line); margin: 2px 3px; align-self: stretch; flex-shrink: 0; }
+
+  /* ============ editor ============ */
+  .editor-shell { flex: 1; position: relative; overflow: hidden; display: flex; }
+  .editor { flex: 1; width: 100%; border: none; outline: none; resize: none; padding: 20px 22px; font-family: 'JetBrains Mono', 'Noto Sans TC', monospace; font-size: 16px; line-height: 1.75; background: var(--surface); color: var(--ink); tab-size: 2; }
+  .editor::placeholder { color: var(--ink-3); }
+  .editor::selection { background: var(--accent-soft); }
+  .editor:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); border-radius: 0; }
+
+  /* ============ preview ============ */
+  .preview-shell { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .preview { flex: 1; padding: 20px 22px; font-family: 'Inter', 'Noto Sans TC', sans-serif; font-size: 16px; line-height: 1.6; color: var(--ink); overflow-wrap: break-word; overflow-y: auto; transition: background 0.2s var(--ease), color 0.2s var(--ease); }
+  .preview p { margin: 0 0 4px; min-height: 1em; }
+  .preview p:empty { min-height: 1em; }
+  .preview strong { font-weight: 700; }
+  .preview em { font-style: italic; }
+  .preview u { text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  .preview .md-h1, .preview .md-h2, .preview .md-h3 { font-weight: 700; margin: 16px 0 4px; color: var(--ink); line-height: 1.25; letter-spacing: -0.01em; }
+  .preview .md-h1 { font-size: 1.5em; }
+  .preview .md-h2 { font-size: 1.25em; }
+  .preview .md-h3 { font-size: 1em; }
+  .preview .md-h1:first-child, .preview .md-h2:first-child, .preview .md-h3:first-child { margin-top: 0; }
+  .preview code.md-inline { background: var(--surface-2); padding: 2px 6px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 0.875em; border: 1px solid var(--line); }
+  .preview pre.md-code { background: #1d1f23; color: #e4e4e4; padding: 10px 14px; border-radius: var(--radius-sm); font-family: 'JetBrains Mono', monospace; font-size: 0.875em; line-height: 1.5; margin: 6px 0; overflow-x: auto; position: relative; }
+  .preview pre.md-code code { font-family: inherit; background: transparent; border: none; padding: 0; font-size: 1em; color: inherit; }
+  .preview blockquote.md-q { border-left: 4px solid var(--line-strong); padding: 2px 0 2px 12px; margin: 4px 0; color: var(--ink); background: transparent; }
+  .preview a.md-link { color: var(--blue); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  .preview a.md-link:hover { color: var(--accent); }
+  .preview .md-spoiler { background: var(--ink); color: var(--ink); border-radius: 3px; padding: 0 3px; cursor: pointer; transition: background 0.15s ease; user-select: none; }
+  .preview .md-spoiler.is-revealed { background: var(--surface-2); color: var(--ink); user-select: auto; }
+  .preview .md-spoiler:focus-visible { box-shadow: 0 0 0 2px var(--accent); outline: none; }
+  .preview ul.md-list, .preview ol.md-list { margin: 4px 0; padding-left: 24px; }
+  .preview li { margin: 2px 0; }
+  .preview .md-subtext { font-size: 0.8125em; color: var(--ink-3); margin: 2px 0; }
+
+  /* Discord dark theme for preview */
+  .preview.is-discord { background: var(--discord-bg); color: var(--discord-text); font-family: 'gg sans', 'Noto Sans TC', 'Helvetica Neue', sans-serif; }
+  .preview.is-discord .md-h1, .preview.is-discord .md-h2, .preview.is-discord .md-h3 { color: #f2f3f5; }
+  .preview.is-discord code.md-inline { background: var(--discord-code); border: 1px solid transparent; color: #dbdee1; }
+  .preview.is-discord pre.md-code { background: var(--discord-code); color: #dbdee1; border: 1px solid transparent; }
+  .preview.is-discord blockquote.md-q { border-left-color: var(--discord-quote); color: var(--discord-text); }
+  .preview.is-discord a.md-link { color: var(--discord-link); }
+  .preview.is-discord a.md-link:hover { color: #00a8fc; filter: brightness(1.15); }
+  .preview.is-discord .md-spoiler { background: var(--discord-quote); color: var(--discord-quote); }
+  .preview.is-discord .md-spoiler.is-revealed { background: rgba(255,255,255,0.08); color: var(--discord-text); }
+  .preview.is-discord .md-subtext { color: var(--discord-muted); }
+  .preview.is-discord ::selection { background: #5865f2; color: #fff; }
+
+  /* ============ buttons ============ */
+  .btn { font-family: 'Inter', 'Noto Sans TC', sans-serif; font-size: 16px; padding: 0 14px; min-height: 38px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); cursor: pointer; color: var(--ink-2); display: inline-flex; align-items: center; gap: 6px; transition: all 0.12s var(--ease); font-weight: 500; white-space: nowrap; }
+  .btn:hover:not(:disabled) { border-color: var(--ink); color: var(--ink); background: var(--surface-2); }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn svg { width: 14px; height: 14px; stroke-width: 1.75; flex-shrink: 0; }
+  .btn.is-copied { background: var(--teal-soft); border-color: var(--teal); color: var(--teal); }
+  .btn-primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .btn-primary:hover:not(:disabled) { background: #000; border-color: #000; color: var(--bg); }
+  .btn-icon { padding: 0; width: 38px; min-width: 38px; justify-content: center; }
+  .btn-icon svg { width: 16px; height: 16px; }
+
+  /* ============ lint panel ============ */
+  .lint { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 20px; box-shadow: var(--shadow-sm); }
+  .lint-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--surface-2); gap: 8px; flex-wrap: wrap; min-height: 52px; }
+  .lint-head-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .lint-head-title { font-family: 'JetBrains Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-2); font-weight: 500; white-space: nowrap; }
+  .lint-badge { font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 2px 10px; border-radius: 10px; background: var(--amber-soft); color: var(--amber); font-variant-numeric: tabular-nums; font-weight: 500; white-space: nowrap; }
+  .lint-badge.is-ok { background: var(--teal-soft); color: var(--teal); }
+  .lint-legend { display: flex; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-3); flex-wrap: wrap; }
+  .lint-legend span { display: inline-flex; align-items: center; white-space: nowrap; }
+  .lint-legend-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; }
+
+  .lint-list { max-height: 320px; overflow-y: auto; }
+  .lint-item { padding: 12px 14px; border-bottom: 1px solid var(--line); font-size: 16px; display: flex; align-items: flex-start; gap: 10px; cursor: pointer; transition: background 0.1s var(--ease); width: 100%; text-align: left; background: var(--surface); border-left: none; border-right: none; border-top: none; font-family: inherit; color: inherit; }
+  .lint-item:last-child { border-bottom: none; }
+  .lint-item:hover { background: var(--surface-2); }
+  .lint-item:focus-visible { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent); }
+  .lint-kind { font-family: 'JetBrains Mono', monospace; font-size: 10px; padding: 2px 6px; border-radius: 2px; font-weight: 500; white-space: nowrap; flex-shrink: 0; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .lint-kind--space { background: var(--blue-soft); color: var(--blue); }
+  .lint-kind--punct { background: var(--amber-soft); color: var(--amber); }
+  .lint-kind--width { background: var(--violet-soft); color: var(--violet); }
+  .lint-kind--extra { background: var(--teal-soft); color: var(--teal); }
+  .lint-line-num { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-3); flex-shrink: 0; margin-top: 2px; min-width: 30px; }
+  .lint-body { flex: 1; min-width: 0; }
+  .lint-msg { color: var(--ink); line-height: 1.4; }
+  .lint-snippet { margin-top: 4px; font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--ink-3); word-break: break-all; line-height: 1.5; }
+  .lint-hi { background: var(--accent-soft); color: var(--accent); padding: 0 3px; border-radius: 2px; font-weight: 500; }
+  .lint-arrow { color: var(--ink-4); margin: 0 6px; }
+  .lint-fix { color: var(--teal); font-weight: 500; background: var(--teal-soft); padding: 0 3px; border-radius: 2px; }
+  .lint-empty { padding: 32px 20px; text-align: center; color: var(--ink-3); font-size: 16px; }
+  .lint-empty svg { display: block; margin: 0 auto 8px; width: 24px; height: 24px; color: var(--teal); }
+
+  /* ============ modal ============ */
+  .docs-kicker { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-3); }
+
+  .modal { position: fixed; inset: 0; z-index: 200; display: none; align-items: center; justify-content: center; padding: 20px; }
+  .modal[aria-hidden="false"] { display: flex; }
+  .modal-backdrop { position: absolute; inset: 0; background: rgba(26, 26, 26, 0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); animation: fadeIn 0.2s var(--ease); }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+  .modal-dialog { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); width: 100%; max-width: 560px; max-height: calc(100vh - 40px); max-height: calc(100dvh - 40px); display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.18); animation: slideUp 0.25s var(--ease); overflow: hidden; }
+
+  .modal-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 22px 14px; border-bottom: 1px solid var(--line); gap: 12px; }
+  .modal-title { font-family: 'Instrument Serif', serif; font-size: 26px; font-style: italic; font-weight: 400; color: var(--ink); margin: 2px 0 0; letter-spacing: -0.01em; line-height: 1.2; }
+  .modal-close { flex-shrink: 0; }
+
+  .modal-tabs { display: flex; gap: 2px; padding: 8px 14px 0; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .modal-tabs button { padding: 10px 14px; background: transparent; border: none; border-bottom: 2px solid transparent; font-family: inherit; font-size: 16px; font-weight: 500; color: var(--ink-3); cursor: pointer; transition: all 0.15s var(--ease); margin-bottom: -1px; }
+  .modal-tabs button:hover { color: var(--ink-2); }
+  .modal-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+
+  .modal-body { flex: 1; overflow-y: auto; padding: 18px 22px 22px; }
+  .modal-panel[hidden] { display: none; }
+
+  /* rule list & syntax — reused inside modal */
+  .rule-list { list-style: none; padding: 0; margin: 0; }
+  .rule-list li { padding: 10px 0; font-size: 16px; color: var(--ink-2); display: grid; grid-template-columns: 20px 1fr; gap: 10px; line-height: 1.6; border-bottom: 1px dashed var(--line); }
+  .rule-list li:last-child { border-bottom: none; }
+  .rule-mark { color: var(--teal); font-weight: 500; font-family: 'JetBrains Mono', monospace; font-size: 14px; }
+  .rule-list code { font-family: 'JetBrains Mono', monospace; font-size: 14px; background: var(--surface-2); padding: 1px 5px; border-radius: 3px; color: var(--ink); word-break: keep-all; }
+
+  .syntax-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px 20px; }
+  .syntax-row { display: flex; justify-content: space-between; gap: 12px; font-size: 16px; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+  .syntax-row:last-child { border-bottom: none; }
+  .syntax-row span { color: var(--ink-2); white-space: nowrap; }
+  .syntax-row code { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--ink); text-align: right; }
+
+  /* ghost button style for reference trigger */
+  .btn-ghost { background: transparent; border-color: var(--line-strong); }
+  .btn-ghost:hover:not(:disabled) { background: var(--surface); border-color: var(--ink); }
+
+  /* footer */
+  .footer { text-align: center; padding: 24px 20px; color: var(--ink-3); font-size: 12px; font-family: 'JetBrains Mono', monospace; }
+  .footer a { color: var(--ink-2); text-decoration: none; border-bottom: 1px solid var(--line); padding-bottom: 1px; }
+  .footer a:hover { color: var(--ink); border-color: var(--ink-2); }
+
+  /* toast */
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--ink); color: var(--bg); padding: 12px 22px; border-radius: var(--radius); font-size: 16px; font-weight: 500; transition: transform 0.28s var(--ease); pointer-events: none; z-index: 100; box-shadow: var(--shadow-toast); display: inline-flex; align-items: center; gap: 8px; }
+  .toast.is-visible { transform: translateX(-50%) translateY(0); }
+  .toast svg { width: 14px; height: 14px; stroke-width: 2; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
+
+  /* ============ responsive ============ */
+  @media (max-width: 960px) {
+    .app { padding: 28px 20px 32px; }
+    .brand-mark { font-size: 34px; }
+  }
+
+  @media (max-width: 720px) {
+    .app { padding: 20px 16px 24px; }
+    .masthead { padding-bottom: 14px; margin-bottom: 16px; gap: 10px; }
+    .brand { gap: 10px; }
+    .brand-mark { font-size: 28px; }
+    .brand-sep { height: 22px; }
+    /* brand-name 保持 16px (正文基準) */
+    .meta { font-size: 10px; letter-spacing: 0.06em; }
+
+    /* switch to tabs for workspace */
+    .mobile-tabs { display: flex; }
+    .workspace { grid-template-columns: 1fr; gap: 0; margin-bottom: 12px; }
+    .panel { min-height: 380px; }
+    .panel[data-hidden-mobile="true"] { display: none; }
+    .panel-head { padding: 8px 12px; min-height: 44px; }
+
+    .lint { margin-bottom: 16px; }
+    .lint-head { padding: 10px 12px; }
+    .lint-legend { width: 100%; margin-top: 2px; }
+    .lint-item { padding: 12px; }
+    .lint-list { max-height: 320px; }
+
+    /* editor/preview 正文保持 16px,僅調整 padding */
+    .editor { padding: 16px; }
+    .preview { padding: 16px; }
+
+    /* modal on mobile */
+    .modal { padding: 12px; }
+    .modal-dialog { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); }
+    .modal-head { padding: 16px 18px 12px; }
+    .modal-title { font-size: 22px; }
+    .modal-body { padding: 14px 18px 18px; }
+    .syntax-grid { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 480px) {
+    .app { padding: 16px 12px 20px; }
+    /* Keep masthead as a single row on mobile — just compress it. */
+    .masthead { flex-direction: row; align-items: center; gap: 8px; padding-bottom: 12px; margin-bottom: 14px; }
+    .masthead-right { flex-shrink: 0; gap: 8px; }
+    /* Hide the "Live preview" status on very narrow screens to give the title room */
+    .meta { display: none; }
+    .brand { gap: 8px; flex: 1; min-width: 0; }
+    .brand-mark { font-size: 24px; }
+    .brand-sep { height: 20px; }
+    /* brand-name 保持 16px — 正文基準 */
+    /* Reference button: 保持 16px 字級,但減少 padding 讓按鈕更緊湊 */
+    #btn-open-reference { padding: 0 12px; min-height: 38px; }
+    .lint-badge { font-size: 10px; }
+    /* Tool buttons 仍保持 15px mono — 正文等寬體視覺等價 16 sans */
+    .tool-btn { min-width: 38px; min-height: 38px; padding: 0 10px; }
+    .btn { min-height: 38px; }
+  }
+
+  /* Ultra-narrow phones (<360px) — hide the reference button label, keep icon only */
+  @media (max-width: 360px) {
+    #btn-open-reference span { display: none; }
+    #btn-open-reference { padding: 0; width: 38px; min-width: 38px; justify-content: center; }
+    .brand-mark { font-size: 22px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  }
+
+  /* Note: this tool follows the system color scheme automatically for the chrome.
+     The Discord preview pane always renders in Discord's native dark theme. */
+</style>
+</head>
+<body>
+
+<main class="app">
+
+  <header class="masthead">
+    <div class="brand">
+      <div class="brand-mark"><em>Discord</em></div>
+      <div class="brand-sep" aria-hidden="true"></div>
+      <div class="brand-name">Markdown Editor</div>
+    </div>
+    <div class="masthead-right">
+      <div class="meta" aria-live="polite">
+        <span class="meta-dot" aria-hidden="true"></span>Live preview
+      </div>
+      <button class="btn btn-ghost" id="btn-open-reference" aria-label="開啟排版規範與語法速查">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M8 11v.5M6.5 6a1.5 1.5 0 0 1 3 0c0 1-1.5 1-1.5 2.5"/></svg>
+        <span>規範 &amp; 語法</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Mobile tab switcher -->
+  <div class="mobile-tabs" role="tablist" aria-label="切換編輯器與預覽">
+    <button id="tab-editor" role="tab" aria-selected="true" aria-controls="panel-editor">
+      編輯<span class="count" id="tab-editor-count"></span>
+    </button>
+    <button id="tab-preview" role="tab" aria-selected="false" aria-controls="panel-preview">
+      預覽
+    </button>
+  </div>
+
+  <section class="workspace">
+
+    <div class="panel" id="panel-editor" role="tabpanel" aria-labelledby="tab-editor">
+      <div class="panel-head">
+        <div class="panel-head-left">
+          <span class="panel-title"><span class="panel-title-num">01</span>Source</span>
+        </div>
+        <div class="panel-head-right">
+          <button class="btn btn-icon" id="btn-clear" title="清空內容" aria-label="清空編輯器內容">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"><path d="M3 4h10M6 4V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1M5 4l1 9a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1l1-9"/></svg>
+          </button>
+          <button class="btn" id="btn-copy-source" aria-label="複製 Discord 原始碼到剪貼簿">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"><rect x="4" y="4" width="9" height="9" rx="1.5"/><path d="M10 4V3a1.5 1.5 0 0 0-1.5-1.5h-5A1.5 1.5 0 0 0 2 3v5a1.5 1.5 0 0 0 1.5 1.5H4"/></svg>
+            <span>複製原始碼</span>
+          </button>
+        </div>
+      </div>
+      <div class="toolbar-wrap">
+        <div class="toolbar" role="toolbar" aria-label="Markdown 格式工具列">
+          <button class="tool-btn" data-wrap="**" aria-label="粗體 (Ctrl+B)" title="粗體">B</button>
+          <button class="tool-btn" data-wrap="*" aria-label="斜體 (Ctrl+I)" title="斜體"><i>I</i></button>
+          <button class="tool-btn" data-wrap="__" aria-label="底線 (Ctrl+U)" title="底線"><u>U</u></button>
+          <button class="tool-btn" data-wrap="~~" aria-label="刪除線" title="刪除線"><s>S</s></button>
+          <div class="tool-divider" aria-hidden="true"></div>
+          <button class="tool-btn" data-wrap="`" aria-label="行內程式碼" title="行內程式碼">&lt;/&gt;</button>
+          <button class="tool-btn" data-wrap="||" aria-label="劇透" title="劇透">||</button>
+          <div class="tool-divider" aria-hidden="true"></div>
+          <button class="tool-btn" data-prefix="# " aria-label="大標題" title="大標題">H1</button>
+          <button class="tool-btn" data-prefix="## " aria-label="副標題" title="副標題">H2</button>
+          <button class="tool-btn" data-prefix="### " aria-label="小標題" title="小標題">H3</button>
+          <button class="tool-btn" data-prefix="-# " aria-label="小字" title="小字">-#</button>
+          <div class="tool-divider" aria-hidden="true"></div>
+          <button class="tool-btn" data-prefix="&gt; " aria-label="引用" title="引用">&gt;</button>
+          <button class="tool-btn" data-prefix="- " aria-label="無序清單" title="無序清單">—</button>
+          <button class="tool-btn" data-prefix="1. " aria-label="有序清單" title="有序清單">1.</button>
+        </div>
+      </div>
+      <div class="editor-shell">
+        <label for="editor" class="sr-only">Markdown 編輯器</label>
+        <textarea id="editor" class="editor" spellcheck="false" placeholder="在這裡輸入 Discord markdown..." aria-describedby="editor-hint"></textarea>
+        <span id="editor-hint" class="sr-only">支援 Discord markdown 語法,下方會即時顯示預覽與排版檢查</span>
+      </div>
+    </div>
+
+    <div class="panel preview-shell" id="panel-preview" role="tabpanel" aria-labelledby="tab-preview">
+      <div class="panel-head">
+        <div class="panel-head-left">
+          <span class="panel-title"><span class="panel-title-num">02</span>Preview</span>
+          <span class="char-count" id="char-count" aria-live="polite">0 chars</span>
+        </div>
+        <div class="panel-head-right">
+          <button class="btn btn-icon" id="btn-copy-text" aria-label="複製預覽純文字">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"><rect x="4" y="4" width="9" height="9" rx="1.5"/><path d="M10 4V3a1.5 1.5 0 0 0-1.5-1.5h-5A1.5 1.5 0 0 0 2 3v5a1.5 1.5 0 0 0 1.5 1.5H4"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="preview" class="preview is-discord" aria-live="polite"></div>
+    </div>
+
+  </section>
+
+  <section class="lint" aria-label="排版檢查結果">
+    <div class="lint-head">
+      <div class="lint-head-left">
+        <span class="lint-head-title"><span class="panel-title-num">03</span>Typography Check</span>
+        <span class="lint-badge" id="lint-badge" aria-live="polite">0</span>
+        <div class="lint-legend" aria-hidden="true">
+          <span><span class="lint-legend-dot" style="background: var(--blue);"></span>空格</span>
+          <span><span class="lint-legend-dot" style="background: var(--amber);"></span>標點</span>
+          <span><span class="lint-legend-dot" style="background: var(--violet);"></span>全半形</span>
+          <span><span class="lint-legend-dot" style="background: var(--teal);"></span>多餘空格</span>
+        </div>
+      </div>
+      <div style="display: flex; gap: 6px;">
+        <button class="btn" id="btn-undo" disabled aria-label="還原上一次修正">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"><path d="M6 4L2 8l4 4M2 8h8a4 4 0 0 1 0 8h-2"/></svg>
+          <span>還原</span>
+        </button>
+        <button class="btn btn-primary" id="btn-fix-all" disabled>
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"><path d="M2 8l3 3 9-9"/></svg>
+          <span>一鍵修正全部</span>
+        </button>
+      </div>
+    </div>
+    <div class="lint-list" id="lint-list" role="list"></div>
+  </section>
+
+</main>
+
+<!-- Reference Modal -->
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-hidden="true">
+  <div class="modal-backdrop" id="modal-backdrop"></div>
+  <div class="modal-dialog" role="document">
+    <header class="modal-head">
+      <div>
+        <div class="docs-kicker">Reference</div>
+        <h2 class="modal-title" id="modal-title">排版規範 &amp; 語法速查</h2>
+      </div>
+      <button class="btn btn-icon modal-close" id="modal-close" aria-label="關閉參考資料視窗">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </header>
+
+    <div class="modal-tabs" role="tablist" aria-label="切換參考資料分頁">
+      <button type="button" role="tab" aria-selected="true" aria-controls="modal-panel-rules" id="modal-tab-rules">中文排版規範</button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="modal-panel-syntax" id="modal-tab-syntax">Markdown 語法</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="modal-panel" role="tabpanel" id="modal-panel-rules" aria-labelledby="modal-tab-rules">
+        <ul class="rule-list">
+          <li><span class="rule-mark">✓</span><span>中文與英文、數字、單位之間加半形空格。例：<code>Discord 頻道</code>、<code>5 MB</code>、<code>2026 年</code></span></li>
+          <li><span class="rule-mark">✓</span><span>度、百分比與數字間不加空格。例：<code>29°C</code>、<code>60%</code></span></li>
+          <li><span class="rule-mark">✓</span><span>中文句子使用全形標點 <code>,。:;!?()「」</code></span></li>
+          <li><span class="rule-mark">✓</span><span>全形標點與其他字符間不需加空格</span></li>
+          <li><span class="rule-mark">✓</span><span>數字與英文使用半形字符，避免 <code>ＡＢＣ</code></span></li>
+          <li><span class="rule-mark">✓</span><span>完整英文整句、書名等特殊名詞，內容使用半形標點</span></li>
+        </ul>
+      </div>
+
+      <div class="modal-panel" role="tabpanel" id="modal-panel-syntax" aria-labelledby="modal-tab-syntax" hidden>
+        <div class="syntax-grid">
+          <div class="syntax-row"><span>粗體</span><code>**text**</code></div>
+          <div class="syntax-row"><span>斜體</span><code>*text*</code></div>
+          <div class="syntax-row"><span>底線</span><code>__text__</code></div>
+          <div class="syntax-row"><span>刪除線</span><code>~~text~~</code></div>
+          <div class="syntax-row"><span>劇透</span><code>||text||</code></div>
+          <div class="syntax-row"><span>行內程式</span><code>`code`</code></div>
+          <div class="syntax-row"><span>程式區塊</span><code>```lang</code></div>
+          <div class="syntax-row"><span>引用</span><code>&gt; text</code></div>
+          <div class="syntax-row"><span>多行引用</span><code>&gt;&gt;&gt; text</code></div>
+          <div class="syntax-row"><span>大標</span><code># text</code></div>
+          <div class="syntax-row"><span>副標</span><code>## text</code></div>
+          <div class="syntax-row"><span>小標</span><code>### text</code></div>
+          <div class="syntax-row"><span>小字</span><code>-# text</code></div>
+          <div class="syntax-row"><span>清單</span><code>- text</code></div>
+          <div class="syntax-row"><span>有序清單</span><code>1. text</code></div>
+          <div class="syntax-row"><span>連結</span><code>[text](url)</code></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  Built for clean Chinese typography · 
+  <a href="https://support.discord.com/hc/en-us/articles/210298617" target="_blank" rel="noopener">Discord markdown docs ↗</a>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite">
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"><path d="M2 8l3 3 9-9"/></svg>
+  <span id="toast-text">已複製</span>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var STORAGE_KEY = 'discord-md-editor-v1';
+  var DEFAULT_CONTENT = '# 歡迎使用 Discord Markdown 編輯器\n## 即時預覽你的訊息排版\n-# 貼到 Discord 之前先檢查一下\n\n**粗體**、*斜體*、__底線__ 與 ~~刪除線~~ 可以自由組合。\n也可以用 ***粗斜體*** 或 __*底線斜體*__ 這種混搭。\n\n> 引言區塊，設計師的日常就是在細節裡打轉\n> 一個字的空隙也不能放過\n\n- 第一個項目\n- 第二個項目\n  - 巢狀項目可以縮排\n\n1. 有序清單第一點\n2. 有序清單第二點\n\n行內程式 `const greeting = "hi"` 像這樣插在句子裡。\n\n```js\nfunction sayHi(name) {\n  return `你好，${name}!`;\n}\n```\n\n劇透藏在這裡 ||按下去才看得到|| 很方便。\n連結也能用 [Discord 官網](https://discord.com) 這種寫法。';
+
+  var editor = document.getElementById('editor');
+  var preview = document.getElementById('preview');
+  var charCount = document.getElementById('char-count');
+  var tabEditorCount = document.getElementById('tab-editor-count');
+  var toolbar = document.querySelector('.toolbar');
+  var btnCopySource = document.getElementById('btn-copy-source');
+  var btnCopyText = document.getElementById('btn-copy-text');
+  var btnFixAll = document.getElementById('btn-fix-all');
+  var btnUndo = document.getElementById('btn-undo');
+  var btnClear = document.getElementById('btn-clear');
+  var lintList = document.getElementById('lint-list');
+  var lintBadge = document.getElementById('lint-badge');
+  var toast = document.getElementById('toast');
+  var toastText = document.getElementById('toast-text');
+  var tabEditor = document.getElementById('tab-editor');
+  var tabPreview = document.getElementById('tab-preview');
+  var panelEditor = document.getElementById('panel-editor');
+  var panelPreview = document.getElementById('panel-preview');
+
+  // undo stack for fix-all
+  var fixHistory = [];
+
+  // ============ load content ============
+  try {
+    var saved = localStorage.getItem(STORAGE_KEY);
+    editor.value = saved !== null ? saved : DEFAULT_CONTENT;
+  } catch (e) {
+    editor.value = DEFAULT_CONTENT;
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // ============ inline markdown parser ============
+  function parseInline(text) {
+    var tokens = [];
+    var i = 0;
+    while (i < text.length) {
+      var ch = text[i];
+
+      if (ch === '`') {
+        var end = text.indexOf('`', i + 1);
+        if (end !== -1) { tokens.push({ type: 'code', content: text.slice(i + 1, end) }); i = end + 1; continue; }
+      }
+      if (ch === '[') {
+        var cb = text.indexOf(']', i + 1);
+        if (cb !== -1 && text[cb + 1] === '(') {
+          var cp = text.indexOf(')', cb + 2);
+          if (cp !== -1) { tokens.push({ type: 'link', text: text.slice(i + 1, cb), url: text.slice(cb + 2, cp) }); i = cp + 1; continue; }
+        }
+      }
+      if (ch === '|' && text[i + 1] === '|') {
+        var se = text.indexOf('||', i + 2);
+        if (se !== -1) { tokens.push({ type: 'spoiler', content: text.slice(i + 2, se) }); i = se + 2; continue; }
+      }
+      if (ch === '*' && text[i + 1] === '*' && text[i + 2] === '*') {
+        var bi = text.indexOf('***', i + 3);
+        if (bi !== -1) { tokens.push({ type: 'bolditalic', content: text.slice(i + 3, bi) }); i = bi + 3; continue; }
+      }
+      if (ch === '*' && text[i + 1] === '*') {
+        var b = text.indexOf('**', i + 2);
+        if (b !== -1) { tokens.push({ type: 'bold', content: text.slice(i + 2, b) }); i = b + 2; continue; }
+      }
+      if (ch === '*') {
+        var it = text.indexOf('*', i + 1);
+        if (it !== -1 && it !== i + 1) { tokens.push({ type: 'italic', content: text.slice(i + 1, it) }); i = it + 1; continue; }
+      }
+      if (ch === '_' && text[i + 1] === '_') {
+        var u = text.indexOf('__', i + 2);
+        if (u !== -1) { tokens.push({ type: 'underline', content: text.slice(i + 2, u) }); i = u + 2; continue; }
+      }
+      if (ch === '_') {
+        var ui = text.indexOf('_', i + 1);
+        if (ui !== -1 && ui !== i + 1) { tokens.push({ type: 'italic', content: text.slice(i + 1, ui) }); i = ui + 1; continue; }
+      }
+      if (ch === '~' && text[i + 1] === '~') {
+        var st = text.indexOf('~~', i + 2);
+        if (st !== -1) { tokens.push({ type: 'strike', content: text.slice(i + 2, st) }); i = st + 2; continue; }
+      }
+
+      if (tokens.length && tokens[tokens.length - 1].type === 'text') {
+        tokens[tokens.length - 1].content += ch;
+      } else {
+        tokens.push({ type: 'text', content: ch });
+      }
+      i++;
+    }
+
+    return tokens.map(function(tok) {
+      switch (tok.type) {
+        case 'text': return escapeHtml(tok.content);
+        case 'code': return '<code class="md-inline">' + escapeHtml(tok.content) + '</code>';
+        case 'bold': return '<strong>' + parseInline(tok.content) + '</strong>';
+        case 'italic': return '<em>' + parseInline(tok.content) + '</em>';
+        case 'bolditalic': return '<strong><em>' + parseInline(tok.content) + '</em></strong>';
+        case 'underline': return '<u>' + parseInline(tok.content) + '</u>';
+        case 'strike': return '<s>' + parseInline(tok.content) + '</s>';
+        case 'spoiler': return '<span class="md-spoiler" tabindex="0" role="button" aria-label="劇透內容，點擊顯示">' + parseInline(tok.content) + '</span>';
+        case 'link':
+          var safeUrl = /^https?:\/\//i.test(tok.url) ? tok.url : '#';
+          return '<a href="' + escapeHtml(safeUrl) + '" class="md-link" target="_blank" rel="noopener">' + escapeHtml(tok.text) + '</a>';
+      }
+      return '';
+    }).join('');
+  }
+
+  // ============ block markdown parser ============
+  function renderBlocks(src) {
+    var lines = src.split('\n');
+    var html = '';
+    var i = 0;
+
+    while (i < lines.length) {
+      var line = lines[i];
+
+      var fence = line.match(/^```(\w*)\s*$/);
+      if (fence) {
+        var codeLines = [];
+        i++;
+        while (i < lines.length && !/^```\s*$/.test(lines[i])) { codeLines.push(lines[i]); i++; }
+        if (i < lines.length) i++;
+        html += '<pre class="md-code"><code>' + escapeHtml(codeLines.join('\n')) + '</code></pre>';
+        continue;
+      }
+
+      if (/^>>>\s?/.test(line)) {
+        var qls = [line.replace(/^>>>\s?/, '')];
+        i++;
+        while (i < lines.length) { qls.push(lines[i]); i++; }
+        html += '<blockquote class="md-q">' + qls.map(function(l) { return parseInline(l); }).join('<br>') + '</blockquote>';
+        continue;
+      }
+      if (/^>\s/.test(line)) {
+        var qLines = [];
+        while (i < lines.length && /^>\s/.test(lines[i])) { qLines.push(lines[i].replace(/^>\s/, '')); i++; }
+        html += '<blockquote class="md-q">' + qLines.map(function(l) { return parseInline(l); }).join('<br>') + '</blockquote>';
+        continue;
+      }
+
+      var h1 = line.match(/^#\s+(.+)$/);
+      var h2 = line.match(/^##\s+(.+)$/);
+      var h3 = line.match(/^###\s+(.+)$/);
+      var subtext = line.match(/^-#\s+(.+)$/);
+      if (subtext) { html += '<p class="md-subtext">' + parseInline(subtext[1]) + '</p>'; i++; continue; }
+      if (h3) { html += '<h3 class="md-h3">' + parseInline(h3[1]) + '</h3>'; i++; continue; }
+      if (h2) { html += '<h2 class="md-h2">' + parseInline(h2[1]) + '</h2>'; i++; continue; }
+      if (h1) { html += '<h1 class="md-h1">' + parseInline(h1[1]) + '</h1>'; i++; continue; }
+
+      if (/^(\s*)[-*]\s+/.test(line)) { var lh = renderList(lines, i, false); html += lh.html; i = lh.end; continue; }
+      if (/^(\s*)\d+\.\s+/.test(line)) { var oh = renderList(lines, i, true); html += oh.html; i = oh.end; continue; }
+
+      if (line.trim() === '') { html += '<p>&nbsp;</p>'; i++; continue; }
+
+      html += '<p>' + parseInline(line) + '</p>';
+      i++;
+    }
+
+    return html;
+  }
+
+  function renderList(lines, start, ordered) {
+    var re = ordered ? /^(\s*)\d+\.\s+(.+)$/ : /^(\s*)[-*]\s+(.+)$/;
+    var tag = ordered ? 'ol' : 'ul';
+    var items = [];
+    var i = start;
+    while (i < lines.length) {
+      var m = lines[i].match(re);
+      if (!m) break;
+      items.push({ indent: m[1].length, content: m[2] });
+      i++;
+    }
+    var html = '<' + tag + ' class="md-list">';
+    var lastIndent = items[0].indent;
+    var openNested = false;
+    for (var k = 0; k < items.length; k++) {
+      var it = items[k];
+      if (it.indent > lastIndent && !openNested) {
+        html = html.replace(/<\/li>$/, '');
+        html += '<' + tag + ' class="md-list"><li>' + parseInline(it.content) + '</li>';
+        openNested = true;
+      } else if (it.indent < lastIndent && openNested) {
+        html += '</' + tag + '></li><li>' + parseInline(it.content) + '</li>';
+        openNested = false;
+      } else {
+        html += '<li>' + parseInline(it.content) + '</li>';
+      }
+      lastIndent = it.indent;
+    }
+    if (openNested) html += '</' + tag + '></li>';
+    html += '</' + tag + '>';
+    return { html: html, end: i };
+  }
+
+  // ============ lint engine ============
+  function buildSkipMask(src) {
+    var mask = new Array(src.length).fill(false);
+    var m;
+    var fenceRe = /```[\s\S]*?```/g;
+    while ((m = fenceRe.exec(src)) !== null) { for (var k = m.index; k < m.index + m[0].length; k++) mask[k] = true; }
+    var inlineRe = /`[^`\n]*`/g;
+    while ((m = inlineRe.exec(src)) !== null) {
+      var covered = false;
+      for (var k2 = m.index; k2 < m.index + m[0].length; k2++) { if (mask[k2]) { covered = true; break; } }
+      if (!covered) for (var k3 = m.index; k3 < m.index + m[0].length; k3++) mask[k3] = true;
+    }
+    var spRe = /\|\|[^\n]*?\|\|/g;
+    while ((m = spRe.exec(src)) !== null) {
+      var c2 = false;
+      for (var k4 = m.index; k4 < m.index + m[0].length; k4++) { if (mask[k4]) { c2 = true; break; } }
+      if (!c2) for (var k5 = m.index; k5 < m.index + m[0].length; k5++) mask[k5] = true;
+    }
+    var linkRe = /\[([^\]\n]*)\]\(([^)\n]*)\)/g;
+    while ((m = linkRe.exec(src)) !== null) {
+      var urlStart = m.index + 1 + m[1].length + 2;
+      for (var k6 = urlStart - 1; k6 < m.index + m[0].length; k6++) mask[k6] = true;
+    }
+    return mask;
+  }
+
+  function isCJK(ch) {
+    if (!ch) return false;
+    var c = ch.charCodeAt(0);
+    return (c >= 0x4E00 && c <= 0x9FFF) || (c >= 0x3400 && c <= 0x4DBF) || (c >= 0x3040 && c <= 0x30FF);
+  }
+  function isAlnum(ch) { return ch ? /[A-Za-z0-9]/.test(ch) : false; }
+
+  function toHalfwidth(ch) {
+    var c = ch.charCodeAt(0);
+    if (c >= 0xFF10 && c <= 0xFF19) return String.fromCharCode(c - 0xFF10 + 0x30);
+    if (c >= 0xFF21 && c <= 0xFF3A) return String.fromCharCode(c - 0xFF21 + 0x41);
+    if (c >= 0xFF41 && c <= 0xFF5A) return String.fromCharCode(c - 0xFF41 + 0x61);
+    if (c === 0x3000) return ' ';
+    return null;
+  }
+
+  var punctMap = { ',': '，', '.': '。', ':': '：', ';': '；', '!': '！', '?': '？', '(': '（', ')': '）' };
+  var punctNames = { ',': '逗號', '.': '句號', ':': '冒號', ';': '分號', '!': '驚嘆號', '?': '問號', '(': '左括號', ')': '右括號' };
+  var fullwidthPunct = '，。：；！？（）「」『』《》、';
+
+  function getSnippet(src, start, end) {
+    return {
+      before: src.slice(Math.max(0, start - 8), start),
+      mid: src.slice(start, end),
+      after: src.slice(end, Math.min(src.length, end + 8))
+    };
+  }
+
+  function lint(src) {
+    var mask = buildSkipMask(src);
+    var issues = [];
+    var lineStarts = [0];
+    for (var i = 0; i < src.length; i++) if (src[i] === '\n') lineStarts.push(i + 1);
+    function lineOf(pos) {
+      var lo = 0, hi = lineStarts.length - 1;
+      while (lo < hi) {
+        var mid = (lo + hi + 1) >> 1;
+        if (lineStarts[mid] <= pos) lo = mid; else hi = mid - 1;
+      }
+      return lo + 1;
+    }
+
+    // PASS 1: fullwidth digits/letters → halfwidth
+    for (var p = 0; p < src.length; p++) {
+      if (mask[p]) continue;
+      var half = toHalfwidth(src[p]);
+      if (half !== null && half !== ' ') {
+        issues.push({
+          start: p, end: p + 1, kind: 'width', replace: half,
+          line: lineOf(p), message: '數字與英文應使用半形字符',
+          snippet: getSnippet(src, p, p + 1)
+        });
+      }
+    }
+
+    // PASS 2: halfwidth punctuation in Chinese context
+    var quoteOpenOnLine = false; // for pairing straight " into 「 / 」
+    for (var p2 = 0; p2 < src.length; p2++) {
+      if (mask[p2]) continue;
+      var ch2 = src[p2];
+      var prev = p2 > 0 ? src[p2 - 1] : '';
+      var next = p2 < src.length - 1 ? src[p2 + 1] : '';
+
+      if (punctMap.hasOwnProperty(ch2)) {
+        if (ch2 === '.' && /\d/.test(prev) && /\d/.test(next)) continue;
+        if (ch2 === '.') {
+          var ls = lineStarts[lineOf(p2) - 1];
+          var before = src.slice(ls, p2);
+          if (/^\s*\d+$/.test(before) && next === ' ') continue;
+        }
+        if (isCJK(prev) || isCJK(next)) {
+          issues.push({
+            start: p2, end: p2 + 1, kind: 'punct', replace: punctMap[ch2],
+            line: lineOf(p2), message: '中文語境應使用全形' + punctNames[ch2],
+            snippet: getSnippet(src, p2, p2 + 1)
+          });
+        }
+      }
+
+      // Straight double quotes in Chinese context → pair up to 「 (open) / 」 (close).
+      // Curly quotes carry direction, use directly.
+      if ((ch2 === '"' || ch2 === '\u201C' || ch2 === '\u201D') && (isCJK(prev) || isCJK(next))) {
+        var suggest;
+        if (ch2 === '\u201C') {
+          suggest = '「';
+        } else if (ch2 === '\u201D') {
+          suggest = '」';
+        } else {
+          // Straight ". Toggle based on running open/close counter (per line scan).
+          // Each line resets at the loop scope — we track on the issue array.
+          // Heuristic: if the previous straight quote on this line was open, this is close; else open.
+          suggest = quoteOpenOnLine ? '」' : '「';
+          quoteOpenOnLine = !quoteOpenOnLine;
+        }
+        issues.push({
+          start: p2, end: p2 + 1, kind: 'punct', replace: suggest,
+          line: lineOf(p2), message: '中文句子應使用全形引號',
+          snippet: getSnippet(src, p2, p2 + 1)
+        });
+      }
+      // Reset quote tracking at line boundaries
+      if (ch2 === '\n') quoteOpenOnLine = false;
+    }
+
+    // PASS 3: missing space between CJK and alphanumeric
+    for (var p3 = 0; p3 < src.length; p3++) {
+      if (mask[p3]) continue;
+      var c3 = src[p3];
+      var n3 = p3 < src.length - 1 ? src[p3 + 1] : '';
+      if (!n3 || mask[p3 + 1]) continue;
+
+      if (isCJK(c3) && isAlnum(n3)) {
+        issues.push({
+          start: p3 + 1, end: p3 + 1, kind: 'space', replace: ' ', insert: true,
+          line: lineOf(p3), message: '中英文之間應加半形空格',
+          snippet: getSnippet(src, p3, p3 + 2)
+        });
+      } else if (isAlnum(c3) && isCJK(n3)) {
+        issues.push({
+          start: p3 + 1, end: p3 + 1, kind: 'space', replace: ' ', insert: true,
+          line: lineOf(p3), message: '中英文之間應加半形空格',
+          snippet: getSnippet(src, p3, p3 + 2)
+        });
+      } else if ((c3 === '°' || c3 === '%' || c3 === '℃' || c3 === '℉') && isCJK(n3)) {
+        issues.push({
+          start: p3 + 1, end: p3 + 1, kind: 'space', replace: ' ', insert: true,
+          line: lineOf(p3), message: '單位與中文之間應加半形空格',
+          snippet: getSnippet(src, p3, p3 + 2)
+        });
+      }
+    }
+
+    // PASS 4: unwanted space around fullwidth punctuation
+    for (var p4 = 0; p4 < src.length; p4++) {
+      if (mask[p4]) continue;
+      var c4 = src[p4];
+      if (fullwidthPunct.indexOf(c4) === -1) continue;
+
+      if (p4 > 0 && src[p4 - 1] === ' ' && !mask[p4 - 1]) {
+        var beforeSpace = p4 >= 2 ? src[p4 - 2] : '';
+        if (isCJK(beforeSpace)) {
+          issues.push({
+            start: p4 - 1, end: p4, kind: 'extra', replace: '',
+            line: lineOf(p4), message: '全形標點前不應有空格',
+            snippet: getSnippet(src, p4 - 1, p4 + 1)
+          });
+        }
+      }
+      if (p4 < src.length - 1 && src[p4 + 1] === ' ' && !mask[p4 + 1]) {
+        var afterSpace = p4 < src.length - 2 ? src[p4 + 2] : '';
+        if (isCJK(afterSpace) || fullwidthPunct.indexOf(afterSpace) !== -1) {
+          issues.push({
+            start: p4 + 1, end: p4 + 2, kind: 'extra', replace: '',
+            line: lineOf(p4), message: '全形標點後不應有空格',
+            snippet: getSnippet(src, p4 + 1, p4 + 2)
+          });
+        }
+      }
+    }
+
+    return issues;
+  }
+
+  // Apply all non-overlapping fixes in a single pass by scanning the source
+  // character by character. This is index-safe by construction: every fix's
+  // start/end always refers to the ORIGINAL src positions, and we build the
+  // output from scratch. Overlapping fixes get resolved by priority (we keep
+  // the first one sorted by start; others are silently skipped and will be
+  // caught by the next re-lint pass).
+  function applyAllFixes(src, issues) {
+    if (issues.length === 0) return src;
+
+    // Group issues by start position. At each source position we may have:
+    //   - one or more "insert" ops (zero-width, applied BEFORE that char)
+    //   - one "replace" op covering [start, end)
+    // Sort by start asc, with inserts before replaces at the same position.
+    var sorted = issues.slice().sort(function(a, b) {
+      if (a.start !== b.start) return a.start - b.start;
+      // same position: inserts first, then the shorter replace
+      if (a.insert && !b.insert) return -1;
+      if (!a.insert && b.insert) return 1;
+      return (a.end - a.start) - (b.end - b.start);
+    });
+
+    var out = '';
+    var cursor = 0; // position in src we've consumed up to
+    for (var i = 0; i < sorted.length; i++) {
+      var iss = sorted[i];
+      // If this fix starts before where we already are, it overlaps with a
+      // previously applied fix — skip it. Next pass will catch it.
+      if (iss.start < cursor) continue;
+      // Copy unchanged prefix up to this fix's start
+      out += src.slice(cursor, iss.start);
+      if (iss.insert) {
+        // Zero-width insertion: emit the replacement but don't advance cursor
+        out += iss.replace;
+        cursor = iss.start;
+      } else {
+        // Replacement: emit replace, advance cursor past original span
+        out += iss.replace;
+        cursor = iss.end;
+      }
+    }
+    // Copy the remainder
+    out += src.slice(cursor);
+    return out;
+  }
+
+  // ============ render ============
+  var kindLabels = { space: 'SPACE', punct: 'PUNCT', width: 'WIDTH', extra: 'EXTRA' };
+
+  function renderLintPanel(issues) {
+    if (issues.length === 0) {
+      lintBadge.classList.add('is-ok');
+      lintBadge.textContent = '✓ 全部合規';
+      lintList.innerHTML = '<div class="lint-empty"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M5 8l2 2 4-4"/></svg>排版符合規範,可以直接複製貼到 Discord</div>';
+      btnFixAll.disabled = true;
+      return;
+    }
+    lintBadge.classList.remove('is-ok');
+    lintBadge.textContent = issues.length + ' issues';
+    btnFixAll.disabled = false;
+
+    var html = '';
+    for (var i = 0; i < issues.length; i++) {
+      var iss = issues[i];
+      var snippetHtml;
+      if (iss.insert) {
+        snippetHtml = escapeHtml(iss.snippet.before) +
+          '<span class="lint-hi">·缺空格·</span>' +
+          escapeHtml(iss.snippet.after);
+      } else if (iss.kind === 'extra') {
+        snippetHtml = escapeHtml(iss.snippet.before) +
+          '<span class="lint-hi">' + (iss.snippet.mid === ' ' ? '␣' : escapeHtml(iss.snippet.mid)) + '</span>' +
+          escapeHtml(iss.snippet.after) +
+          '<span class="lint-arrow">→</span><span class="lint-fix">刪除</span>';
+      } else {
+        snippetHtml = escapeHtml(iss.snippet.before) +
+          '<span class="lint-hi">' + escapeHtml(iss.snippet.mid) + '</span>' +
+          escapeHtml(iss.snippet.after) +
+          '<span class="lint-arrow">→</span><span class="lint-fix">' + escapeHtml(iss.replace) + '</span>';
+      }
+
+      html += '<button type="button" class="lint-item" role="listitem" data-start="' + iss.start + '" data-end="' + iss.end + '">' +
+        '<span class="lint-kind lint-kind--' + iss.kind + '">' + kindLabels[iss.kind] + '</span>' +
+        '<span class="lint-line-num">L' + iss.line + '</span>' +
+        '<div class="lint-body">' +
+        '<div class="lint-msg">' + escapeHtml(iss.message) + '</div>' +
+        '<div class="lint-snippet">' + snippetHtml + '</div>' +
+        '</div></button>';
+    }
+    lintList.innerHTML = html;
+
+    lintList.querySelectorAll('.lint-item').forEach(function(el) {
+      el.addEventListener('click', function() {
+        var s = parseInt(el.getAttribute('data-start'), 10);
+        var e = parseInt(el.getAttribute('data-end'), 10);
+        // expand selection context — select surrounding word/phrase (up to 6 chars each side)
+        var value = editor.value;
+        var selStart = s;
+        var selEnd = Math.max(s + 1, e);
+        // expand forward a bit to show context
+        while (selEnd < value.length && selEnd - selStart < 8 && value[selEnd] !== '\n') selEnd++;
+        while (selStart > 0 && selEnd - selStart < 12 && value[selStart - 1] !== '\n') selStart--;
+
+        // on mobile, switch to editor tab
+        if (window.matchMedia('(max-width: 720px)').matches) {
+          switchTab('editor');
+        }
+        editor.focus();
+        editor.selectionStart = selStart;
+        editor.selectionEnd = selEnd;
+        // scroll editor to selection
+        var lineNum = value.substr(0, selStart).split('\n').length;
+        editor.scrollTop = (lineNum - 3) * 22;
+      });
+    });
+  }
+
+  var saveTimer;
+  function render() {
+    var src = editor.value;
+    // Preserve preview scroll position so live edits don't yank the view back to top
+    var previewScroll = preview.scrollTop;
+    preview.innerHTML = renderBlocks(src);
+    preview.scrollTop = previewScroll;
+    var len = src.length;
+    charCount.textContent = len.toLocaleString() + ' chars';
+
+    // reattach spoiler handlers
+    preview.querySelectorAll('.md-spoiler').forEach(function(sp) {
+      sp.addEventListener('click', function() { sp.classList.toggle('is-revealed'); });
+      sp.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sp.classList.toggle('is-revealed'); }
+      });
+    });
+
+    var issues = lint(src);
+    renderLintPanel(issues);
+    tabEditorCount.textContent = issues.length > 0 ? ' · ' + issues.length : '';
+
+    // debounced save
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function() {
+      try { localStorage.setItem(STORAGE_KEY, src); } catch (e) {}
+    }, 300);
+  }
+
+  editor.addEventListener('input', render);
+
+  // ============ toolbar ============
+  // Prevent toolbar buttons from stealing focus from the editor — that's what
+  // causes the "scroll jump" when clicking format buttons. Keeping the editor
+  // focused means no page scroll, no caret loss, and feels native like a rich
+  // text editor.
+  toolbar.addEventListener('mousedown', function(e) {
+    if (e.target.closest('.tool-btn')) e.preventDefault();
+  });
+
+  toolbar.addEventListener('click', function(e) {
+    var btn = e.target.closest('.tool-btn');
+    if (!btn) return;
+    var wrap = btn.getAttribute('data-wrap');
+    var prefix = btn.getAttribute('data-prefix');
+    var start = editor.selectionStart;
+    var end = editor.selectionEnd;
+    var value = editor.value;
+    // Preserve scroll position across value mutation (setting .value resets scrollTop)
+    var scrollTop = editor.scrollTop;
+
+    if (wrap) {
+      var selected = value.slice(start, end) || 'text';
+      var inserted = wrap + selected + wrap;
+      editor.value = value.slice(0, start) + inserted + value.slice(end);
+      editor.focus({ preventScroll: true });
+      editor.selectionStart = start + wrap.length;
+      editor.selectionEnd = start + wrap.length + selected.length;
+    } else if (prefix) {
+      var lineStart = value.lastIndexOf('\n', start - 1) + 1;
+      editor.value = value.slice(0, lineStart) + prefix + value.slice(lineStart);
+      editor.focus({ preventScroll: true });
+      editor.selectionStart = editor.selectionEnd = start + prefix.length;
+    }
+    editor.scrollTop = scrollTop;
+    render();
+  });
+
+  // ============ fix-all with undo ============
+  btnFixAll.addEventListener('click', function() {
+    var before = editor.value;
+    // Loop until either no issues remain, or a pass produced no changes
+    // (meaning remaining issues conflict and can't be resolved automatically).
+    var prev = null;
+    for (var pass = 0; pass < 20; pass++) {
+      var cur = editor.value;
+      if (cur === prev) break; // no change since last pass — bail out to avoid infinite loop
+      var iss = lint(cur);
+      if (iss.length === 0) break;
+      prev = cur;
+      editor.value = applyAllFixes(cur, iss);
+    }
+    fixHistory.push(before);
+    if (fixHistory.length > 20) fixHistory.shift();
+    btnUndo.disabled = false;
+    render();
+    var finalIssues = lint(editor.value);
+    if (finalIssues.length === 0) {
+      showToast('已套用所有修正 · 可按「還原」回復');
+    } else {
+      showToast('已修正 ' + (lint(before).length - finalIssues.length) + ' 項 · 剩餘 ' + finalIssues.length + ' 項需手動確認');
+    }
+  });
+
+  btnUndo.addEventListener('click', function() {
+    if (fixHistory.length === 0) return;
+    editor.value = fixHistory.pop();
+    btnUndo.disabled = fixHistory.length === 0;
+    render();
+    showToast('已還原上一次修正');
+  });
+
+  // ============ clear ============
+  btnClear.addEventListener('click', function() {
+    if (editor.value.trim() === '') return;
+    if (!confirm('確定要清空所有內容嗎？此動作可由瀏覽器的「復原」快捷鍵 (Ctrl/Cmd + Z) 還原。')) return;
+    var before = editor.value;
+    fixHistory.push(before);
+    btnUndo.disabled = false;
+    editor.value = '';
+    editor.focus();
+    render();
+    showToast('已清空內容');
+  });
+
+  // ============ copy ============
+  function showToast(msg) {
+    toastText.textContent = msg;
+    toast.classList.add('is-visible');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(function() { toast.classList.remove('is-visible'); }, 2200);
+  }
+  function showCopiedOnButton(btn) {
+    btn.classList.add('is-copied');
+    setTimeout(function() { btn.classList.remove('is-copied'); }, 1500);
+  }
+  function copyToClipboard(text, btn, successMsg) {
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        showCopiedOnButton(btn);
+        showToast(successMsg);
+      } catch (e) { showToast('複製失敗，請手動選取'); }
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(function() {
+        showCopiedOnButton(btn);
+        showToast(successMsg);
+      }, fallback);
+    } else { fallback(); }
+  }
+
+  btnCopySource.addEventListener('click', function() {
+    if (!editor.value) { showToast('沒有內容可複製'); return; }
+    copyToClipboard(editor.value, btnCopySource, '已複製原始碼 · 貼到 Discord 即可');
+  });
+  btnCopyText.addEventListener('click', function() {
+    var text = preview.innerText.trim();
+    if (!text) { showToast('沒有內容可複製'); return; }
+    copyToClipboard(text, btnCopyText, '已複製渲染後的純文字');
+  });
+
+  // ============ mobile tabs ============
+  function switchTab(which) {
+    if (which === 'editor') {
+      tabEditor.setAttribute('aria-selected', 'true');
+      tabPreview.setAttribute('aria-selected', 'false');
+      panelEditor.removeAttribute('data-hidden-mobile');
+      panelPreview.setAttribute('data-hidden-mobile', 'true');
+    } else {
+      tabEditor.setAttribute('aria-selected', 'false');
+      tabPreview.setAttribute('aria-selected', 'true');
+      panelEditor.setAttribute('data-hidden-mobile', 'true');
+      panelPreview.removeAttribute('data-hidden-mobile');
+    }
+  }
+  tabEditor.addEventListener('click', function() { switchTab('editor'); });
+  tabPreview.addEventListener('click', function() { switchTab('preview'); });
+
+  // Reset tab state when resizing back to desktop
+  var mql = window.matchMedia('(max-width: 720px)');
+  function handleResize(e) {
+    if (!e.matches) {
+      panelEditor.removeAttribute('data-hidden-mobile');
+      panelPreview.removeAttribute('data-hidden-mobile');
+    } else {
+      // default to editor tab on mobile
+      if (tabEditor.getAttribute('aria-selected') !== 'true' && tabPreview.getAttribute('aria-selected') !== 'true') {
+        switchTab('editor');
+      } else {
+        // re-apply current tab
+        var active = tabEditor.getAttribute('aria-selected') === 'true' ? 'editor' : 'preview';
+        switchTab(active);
+      }
+    }
+  }
+  if (mql.addEventListener) mql.addEventListener('change', handleResize);
+  else mql.addListener(handleResize);
+  handleResize(mql);
+
+  // ============ keyboard shortcuts ============
+  editor.addEventListener('keydown', function(e) {
+    var meta = e.metaKey || e.ctrlKey;
+    if (!meta) return;
+    var map = { 'b': '**', 'i': '*', 'u': '__' };
+    if (map[e.key]) {
+      e.preventDefault();
+      var wrap = map[e.key];
+      var s = editor.selectionStart, en = editor.selectionEnd, v = editor.value;
+      var sel = v.slice(s, en) || 'text';
+      editor.value = v.slice(0, s) + wrap + sel + wrap + v.slice(en);
+      editor.selectionStart = s + wrap.length;
+      editor.selectionEnd = s + wrap.length + sel.length;
+      render();
+    }
+  });
+
+  // Global shortcut: Cmd/Ctrl + Shift + F = fix all
+  document.addEventListener('keydown', function(e) {
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+      if (!btnFixAll.disabled) {
+        e.preventDefault();
+        btnFixAll.click();
+      }
+    }
+  });
+
+  // ============ modal ============
+  var modal = document.getElementById('modal');
+  var modalBackdrop = document.getElementById('modal-backdrop');
+  var modalClose = document.getElementById('modal-close');
+  var btnOpenReference = document.getElementById('btn-open-reference');
+  var modalTabRules = document.getElementById('modal-tab-rules');
+  var modalTabSyntax = document.getElementById('modal-tab-syntax');
+  var modalPanelRules = document.getElementById('modal-panel-rules');
+  var modalPanelSyntax = document.getElementById('modal-panel-syntax');
+  var lastFocusedBeforeModal = null;
+
+  function getFocusables(container) {
+    return container.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])');
+  }
+
+  function openModal() {
+    lastFocusedBeforeModal = document.activeElement;
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    // focus first focusable
+    setTimeout(function() {
+      var f = getFocusables(modal);
+      if (f.length) f[0].focus();
+    }, 50);
+  }
+
+  function closeModal() {
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    if (lastFocusedBeforeModal && typeof lastFocusedBeforeModal.focus === 'function') {
+      lastFocusedBeforeModal.focus();
+    }
+  }
+
+  function switchModalTab(which) {
+    var isRules = which === 'rules';
+    modalTabRules.setAttribute('aria-selected', isRules ? 'true' : 'false');
+    modalTabSyntax.setAttribute('aria-selected', isRules ? 'false' : 'true');
+    if (isRules) {
+      modalPanelRules.hidden = false;
+      modalPanelSyntax.hidden = true;
+    } else {
+      modalPanelRules.hidden = true;
+      modalPanelSyntax.hidden = false;
+    }
+  }
+
+  btnOpenReference.addEventListener('click', openModal);
+  modalClose.addEventListener('click', closeModal);
+  modalBackdrop.addEventListener('click', closeModal);
+  modalTabRules.addEventListener('click', function() { switchModalTab('rules'); });
+  modalTabSyntax.addEventListener('click', function() { switchModalTab('syntax'); });
+
+  // modal keyboard handling: Esc to close, Tab trap, arrow keys for tabs
+  document.addEventListener('keydown', function(e) {
+    if (modal.getAttribute('aria-hidden') === 'false') {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeModal();
+        return;
+      }
+      if (e.key === 'Tab') {
+        var f = getFocusables(modal);
+        if (f.length === 0) return;
+        var first = f[0];
+        var last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+      // arrow keys on tab list
+      if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
+          (document.activeElement === modalTabRules || document.activeElement === modalTabSyntax)) {
+        e.preventDefault();
+        if (document.activeElement === modalTabRules) {
+          switchModalTab('syntax');
+          modalTabSyntax.focus();
+        } else {
+          switchModalTab('rules');
+          modalTabRules.focus();
+        }
+      }
+    }
+  });
+
+  // ============ init ============
+  render();
+})();
+</script>
+
+</body>
+</html>
